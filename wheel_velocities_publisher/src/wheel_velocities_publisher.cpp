@@ -20,14 +20,7 @@ public:
 private:
   void publish_wheel_speeds() {
     auto message = std_msgs::msg::Float32MultiArray();
-
-    // Set up the layout
-    message.layout.dim.clear();
-    std_msgs::msg::MultiArrayDimension dim;
-    dim.label = "wheel_speeds";
-    dim.size = 4;
-    dim.stride = 4;
-    message.layout.dim.push_back(dim);
+    message.layout.data_offset = 0;
     message.data.resize(4);
 
     switch (motion_index_) {
