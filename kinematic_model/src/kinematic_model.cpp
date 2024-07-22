@@ -32,7 +32,7 @@ private:
     double L =
         0.17; // Distance from the robot center to the wheel, adjust as needed
     double w = 0.135; // Half of the track width, adjust as needed
-    double r = 0.1; // Radius of the wheel, adjust as needed
+    double r = 0.1;   // Radius of the wheel, adjust as needed
 
     // Calculate the chassis velocities
     double vx = r * (fl + fr + bl + br) / 4.0;
