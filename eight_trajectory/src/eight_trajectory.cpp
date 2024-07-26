@@ -35,18 +35,24 @@ public:
 
 private:
   void odom_callback(const nav_msgs::msg::Odometry::SharedPtr msg) {
+    current_pose_ = msg->pose.pose;
     if (!initial_pose_set_) {
-      initial_x_ = msg->pose.pose.position.x;
-      initial_y_ = msg->pose.pose.position.y;
-      initial_yaw_ = get_yaw_from_pose(msg->pose.pose);
+      initial_x_ = current_pose_.position.x;
+      initial_y_ = current_pose_.position.y;
+      initial_yaw_ = get_yaw_from_pose(current_pose_);
       initial_pose_set_ = true;
     }
 
-    current_pose_ = msg->pose.pose;
-    reached_waypoint_ = check_if_reached_waypoint();
-    if (reached_waypoint_ && current_waypoint_idx_ < waypoints_.size() - 1) {
+    if (check_if_reached_waypoint()) {
+      update_initial_position();
       current_waypoint_idx_++;
-      reached_waypoint_ = false; // Proceed to next waypoint
+      if (current_waypoint_idx_ >= waypoints_.size()) {
+        RCLCPP_INFO(this->get_logger(), "All waypoints reached. Stopping.");
+        rclcpp::shutdown();
+      } else {
+        RCLCPP_INFO(this->get_logger(), "Reached waypoint %zu",
+                    current_waypoint_idx_);
+      }
     }
   }
 
@@ -54,8 +60,14 @@ private:
     double current_x = current_pose_.position.x;
     double current_y = current_pose_.position.y;
 
-    double global_target_x = initial_x_ + waypoints_[current_waypoint_idx_][1];
-    double global_target_y = initial_y_ + waypoints_[current_waypoint_idx_][2];
+    double global_target_x =
+        initial_x_ +
+        waypoints_[current_waypoint_idx_][1] * std::cos(initial_yaw_) -
+        waypoints_[current_waypoint_idx_][2] * std::sin(initial_yaw_);
+    double global_target_y =
+        initial_y_ +
+        waypoints_[current_waypoint_idx_][1] * std::sin(initial_yaw_) +
+        waypoints_[current_waypoint_idx_][2] * std::cos(initial_yaw_);
 
     double distance = std::sqrt(std::pow(global_target_x - current_x, 2) +
                                 std::pow(global_target_y - current_y, 2));
@@ -69,8 +81,14 @@ private:
       return;
     }
 
-    double global_target_x = initial_x_ + waypoints_[current_waypoint_idx_][1];
-    double global_target_y = initial_y_ + waypoints_[current_waypoint_idx_][2];
+    double global_target_x =
+        initial_x_ +
+        waypoints_[current_waypoint_idx_][1] * std::cos(initial_yaw_) -
+        waypoints_[current_waypoint_idx_][2] * std::sin(initial_yaw_);
+    double global_target_y =
+        initial_y_ +
+        waypoints_[current_waypoint_idx_][1] * std::sin(initial_yaw_) +
+        waypoints_[current_waypoint_idx_][2] * std::cos(initial_yaw_);
 
     double current_x = current_pose_.position.x;
     double current_y = current_pose_.position.y;
@@ -114,10 +132,6 @@ private:
                     static_cast<float>(wheel_speeds[3])};
 
     wheel_speed_publisher_->publish(message);
-    RCLCPP_INFO(
-        this->get_logger(),
-        "Publishing wheel speeds - FL: %.2f, FR: %.2f, RL: %.2f, RR: %.2f",
-        wheel_speeds[0], wheel_speeds[1], wheel_speeds[2], wheel_speeds[3]);
   }
 
   std::array<double, 4> compute_wheel_speeds(double vx, double vy,
@@ -135,11 +149,6 @@ private:
     for (auto &speed : wheel_speeds) {
       speed /= r;
     }
-
-    RCLCPP_INFO(this->get_logger(),
-                "Wheel speeds - FL: %.2f, FR: %.2f, RL: %.2f, RR: %.2f",
-                wheel_speeds[0], wheel_speeds[1], wheel_speeds[2],
-                wheel_speeds[3]);
 
     return wheel_speeds;
   }
@@ -161,15 +170,21 @@ private:
     return angle;
   }
 
+  void update_initial_position() {
+    initial_x_ = current_pose_.position.x;
+    initial_y_ = current_pose_.position.y;
+    initial_yaw_ = get_yaw_from_pose(current_pose_);
+  }
+
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_subscription_;
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr
       wheel_speed_publisher_;
   rclcpp::TimerBase::SharedPtr timer_;
 
   geometry_msgs::msg::Pose current_pose_;
-  double initial_x_ = 0.0;
-  double initial_y_ = 0.0;
-  double initial_yaw_ = 0.0;
+  double initial_x_;
+  double initial_y_;
+  double initial_yaw_;
   bool initial_pose_set_;
   bool reached_waypoint_;
 
